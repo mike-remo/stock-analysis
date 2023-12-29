@@ -25,10 +25,14 @@ Additionally, to retrieve new data, you will need to get your own free API keys 
 
 ## Usage
 1. Download the files into the same directory
-2. Add your API keys to _keys.json_
+2. Sign up for your free API keys from TwelveData and AlphaVantage, then add your API keys to _keys.json_
 3. Add some stock symbols (one per line and in ALL CAPS) into _stocklist.txt_
 4. Run _GetData.py_ to load data into the DB. (A new SQLite DB file named data1.sqlite will be created if it doesn't already exist.)
 5. Run _Demo.py_ to view results from a variety of pre-written queries.
+
+### Optionally
+* You may use the provided _samples/data1.sqlite_ SQLite DB file that already has some sample data loaded into it. If so, you may skip steps 2 and 4.
+* You may use the provided _samples/stocklist.txt_ file which already contains some stock symbols. If so, you may skip step 3
 
 ## Details
 TO DO
