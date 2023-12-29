@@ -52,9 +52,9 @@ def saveData(file: str, data):
 # Function for writing and updating SQLite DB.
 # Option specifies:
 # 1 for initializing DB and defining schema
-# 2 for writing TD stock data to the staging table then transfer to main table
-# 3 for writing AV earnings data to the staging table, then transfer to main table
-# 4 for writing stock description info from TD
+# 2 for writing stock data to the staging table, then transfer to main table
+# 3 for writing earnings data to the staging table, then transfer to main table
+# 4 for writing stock description info
 def writeDB(file: str, option = 0, data = None):
     if option not in [1,2,3,4]: return # invalid options
     print("Opening SQLite DB...")
@@ -63,7 +63,8 @@ def writeDB(file: str, option = 0, data = None):
     print("Writing to DB...")
 
     if option == 1:
-        SQLtables = [
+        SQLddl = [
+            # Schema DDL
             "CREATE TABLE stock_staging (datetime, symbol, open, high, low, close, volume);",
             "CREATE TABLE stocks (datetime, symbol, open, high, low, close, volume, CONSTRAINT uq_pk PRIMARY KEY (datetime, symbol));",
             "CREATE TABLE stock_descr (symbol, name, currency, exchange, mic_code, country, type, CONSTRAINT uq_pk PRIMARY KEY (symbol,exchange));",
@@ -71,8 +72,41 @@ def writeDB(file: str, option = 0, data = None):
             "CREATE TABLE annual_eps (symbol, fiscalDateEnding, reportedEPS, CONSTRAINT uq_pk PRIMARY KEY (symbol, fiscalDateEnding));",
             "CREATE TABLE quarter_eps_staging (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage);",
             "CREATE TABLE quarter_eps (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage, ttm, CONSTRAINT uq_pk PRIMARY KEY (symbol, fiscalDateEnding));",
+            # P/E Ratio and Earnings Yield
+            "DROP VIEW IF EXISTS vw_pe_and_ey;",
+            "CREATE VIEW vw_pe_and_ey AS SELECT stk.symbol, datetime as close_date, (close/ttm) AS PEratio, (ttm/close) AS EarnYield FROM stocks AS stk "
+            "LEFT JOIN quarter_eps AS eps ON stk.symbol = eps.symbol AND fiscalDateEnding = ( "
+            "SELECT MAX(fiscalDateEnding) FROM quarter_eps WHERE fiscalDateEnding <= datetime AND symbol = stk.symbol);",
+            # Simple Moving Averages
+            "DROP VIEW IF EXISTS vw_SMA15d;",
+            "CREATE VIEW vw_SMA15d AS SELECT symbol, datetime AS close_date, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 14 FOLLOWING) / 14 as MovAVG FROM stocks;",
+            # Gain/Loss for RSI
+            "DROP VIEW IF EXISTS vw_gainloss14d;",
+            "CREATE VIEW vw_gainloss14d AS "
+            "WITH cte AS (SELECT symbol, datetime AS close_date, close AS close_price, LEAD(close,1) OVER (PARTITION BY symbol ORDER BY datetime DESC) prev_close FROM stocks) "
+            "SELECT symbol, close_date, close_price,"
+            "CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END gain, "
+            "CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END loss, "
+            "AVG(CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_gain14, "
+            "AVG(CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_loss14 "
+            "FROM cte GROUP BY symbol, close_date ORDER BY close_date DESC;",
+            # Relative Strength Index
+            "DROP VIEW IF EXISTS vw_rsi;",
+            "CREATE VIEW vw_rsi AS "
+            "WITH RECURSIVE cte_gainloss AS ( "
+            "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, * "
+            "FROM vw_gainloss14d  WHERE close_date > date('now','-180 days') "
+            "), cte_recur AS ( "
+            "SELECT *, avg_gain14 AS avg_gain, avg_loss14 AS avg_loss FROM cte_gainloss WHERE rownum = 14 "
+            "UNION ALL SELECT curr.*, (prev.avg_gain * 13 + curr.gain) / 14, (prev.avg_loss * 13 + curr.loss) / 14 "
+            "FROM cte_gainloss AS curr INNER JOIN cte_recur AS prev "
+            "ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
+            ") SELECT symbol, close_date, close_price, avg_gain, avg_loss, "
+            "(avg_gain / avg_loss) AS RS, 100 - (100 / (1 + (avg_gain / avg_loss))) AS RSI "
+            "FROM cte_recur ORDER BY close_date DESC;"
         ]
-        for c in SQLtables: cursor.execute(c)
+        for c in SQLddl: cursor.execute(c)
 
     elif option == 2 and data != None:
         cursor.execute("DELETE FROM stock_staging;")
@@ -93,7 +127,13 @@ def writeDB(file: str, option = 0, data = None):
         for j in data["quarterlyEarnings"]:
             cursor.execute("INSERT INTO quarter_eps_staging (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage) VALUES (?, ?, ?, ?, ?, ?);",
                            (symbol, j["fiscalDateEnding"], j["reportedEPS"], j["estimatedEPS"], j["surprise"], j["surprisePercentage"]))
-        cursor.execute("INSERT OR IGNORE INTO quarter_eps (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage) SELECT symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage FROM quarter_eps_staging WHERE reportedEPS != 'None';")
+        cursor.execute("INSERT OR IGNORE INTO quarter_eps (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage) "
+                       "SELECT symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage FROM quarter_eps_staging WHERE reportedEPS != 'None';")
+
+        # Update quarter_eps table with the calculated ttm values
+        cursor.execute("UPDATE quarter_eps SET ttm = sub.ttm FROM (SELECT symbol, reportedEPS, fiscalDateEnding, "
+                       "SUM(reportedEPS) OVER (PARTITION BY symbol ORDER BY fiscalDateEnding DESC ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) AS ttm "
+                       "FROM quarter_eps) sub WHERE quarter_eps.symbol = sub.symbol AND quarter_eps.fiscalDateEnding = sub.fiscalDateEnding;")
 
     elif option == 4 and data != None:
         for d in data["data"]:
