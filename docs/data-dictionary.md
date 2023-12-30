@@ -1,6 +1,7 @@
-DB SCHEMA:
-# METADATA / DATA DICTIONARY:
-| stocks | the main fact table. Each record contains the stock price values for each stock symbol on open, close, high, low, and trading volume for each day. Primary key is a composite key on the date and symbol. |
+# METADATA / DATA DICTIONARY
+
+## stocks
+Main fact table. Each record contains the stock price values for each stock symbol on open, close, high, low, and trading volume for each day. Primary key is a composite key on the date and symbol.
 | column | description |
 | --- | --- |
 | datetime | date of trades |
@@ -11,7 +12,8 @@ DB SCHEMA:
 | close | closing price at end of the day |
 | volume | trading volume for this day |
 
-| stock_staging | staging table used to load new data into the DB. We can verify/sanitize/wrangle data here before transferring it into the main table. |
+## stock_staging
+Staging table used to load new data into the DB. We can verify/sanitize/wrangle data here before transferring it into the main table.
 | column | description |
 | --- | --- |
 | datetime | date of trades |
@@ -22,7 +24,8 @@ DB SCHEMA:
 | close | closing price at end of the day |
 | volume | trading volume for this day |
 
-| stock_descr | dimension table containing some details about each stock symbol, such as the company name and the particular exchange. Primary key is a composite key on the symbol and exchange name. |
+## stock_descr
+Dimension table containing some details about each stock symbol, such as the company name and the particular exchange. Primary key is a composite key on the symbol and exchange name.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
@@ -33,21 +36,24 @@ DB SCHEMA:
 | country | country where exchange is located |
 | type | common issue type |
 
-| annual_eps | fact table for the annual EPS data. We may cross reference this to the stocks table when perfmoring data analysis. |
+## annual_eps
+Fact table for the annual EPS data. We may cross reference this to the stocks table when perfmoring data analysis.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
 | fiscalDateEnding | Fiscal Year end date |
 | reportedEPS | Earnings Per Share (EPS) as reported by company |
 
-| annual_eps_staging | staging table for the annual EPS data intially loaded into the DB. |
+## annual_eps_staging
+Staging table for the annual EPS data intially loaded into the DB.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
 | fiscalDateEnding | Fiscal Year end date |
 | reportedEPS | Earnings Per Share (EPS) as reported by company |
 
-| quarter_eps | fact table for the quarterly EPS data. We may cross reference this to the stocks table when perfmoring data analysis. |
+## quarter_eps
+Fact table for the quarterly EPS data. We may cross reference this to the stocks table when perfmoring data analysis.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
@@ -57,7 +63,8 @@ DB SCHEMA:
 | surprise | Deviation between reportedEPS and estimatedEPS |
 | surprisePercentage | Deviation between reportedEPS and estimatedEPS in percent |
 
-| quarter_eps_staging | staging table for the quarterly EPS data intially loaded into the DB. |
+## quarter_eps_staging
+Staging table for the quarterly EPS data intially loaded into the DB.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
