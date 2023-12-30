@@ -1,4 +1,4 @@
-# Get Data for Technical Analysis of Stocks
+# Demo for Technical Analysis of Stocks
 # Copyright (C) 2023 Michael Remollino (mikeremo at g mail dot com)
 #
 # This program is free software: you can redistribute it and/or modify
