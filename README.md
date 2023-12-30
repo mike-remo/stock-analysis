@@ -44,7 +44,7 @@ This project currently has the following limitations:
 2. The Free API access from Twelve Data and AlphaVantage both have API call limits. For the exact rate and daily API limits, please visit the website of each.
 
 ### Additional Documentation
-TO DO
+_docs/data-dictionary.md_
 
 ### LICENSE
 GNU General Public License v3.0
