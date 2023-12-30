@@ -37,7 +37,7 @@ Dimension table containing some details about each stock symbol, such as the com
 | type | common issue type |
 
 ## annual_eps
-Fact table for the annual EPS data. We may cross reference this to the stocks table when perfmoring data analysis.
+Fact table for the annual EPS data. We may cross reference this to the stocks table when performing data analysis.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
@@ -45,7 +45,7 @@ Fact table for the annual EPS data. We may cross reference this to the stocks ta
 | reportedEPS | Earnings Per Share (EPS) as reported by company |
 
 ## annual_eps_staging
-Staging table for the annual EPS data intially loaded into the DB.
+Staging table for the annual EPS data initially loaded into the DB.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
@@ -53,7 +53,7 @@ Staging table for the annual EPS data intially loaded into the DB.
 | reportedEPS | Earnings Per Share (EPS) as reported by company |
 
 ## quarter_eps
-Fact table for the quarterly EPS data. We may cross reference this to the stocks table when perfmoring data analysis.
+Fact table for the quarterly EPS data. We may cross reference this to the stocks table when performing data analysis.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
@@ -64,7 +64,7 @@ Fact table for the quarterly EPS data. We may cross reference this to the stocks
 | surprisePercentage | Deviation between reportedEPS and estimatedEPS in percent |
 
 ## quarter_eps_staging
-Staging table for the quarterly EPS data intially loaded into the DB.
+Staging table for the quarterly EPS data initially loaded into the DB.
 | column | description |
 | --- | --- |
 | symbol | instrument symbol (ticker) |
