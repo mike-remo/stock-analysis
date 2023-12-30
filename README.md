@@ -8,9 +8,9 @@ This project is a simple look at performing "_technical analysis_" on stock mark
 2. Integrate and organize the data into owned database
 3. Perform data analysis to derive technical indicators
 
-To accomplish this, we will retrieve time series (and other stock market data such as earnings reports) from external sources. Since external data sources are not 100% reliable, we will make use two different sources: Twelve Data https://twelvedata.com/ and AlphaVantage https://www.alphavantage.co/
+To accomplish this, we will retrieve time series (and other stock market data such as earnings reports) from external sources. Since external data sources are not 100% reliable, we will make use of two different sources: Twelve Data https://twelvedata.com/ and AlphaVantage https://www.alphavantage.co/
 
-Data will be retrieved with API calls made with the "requests" Python library, then loaded into a SQLite database. The SQLite module is part of the standard library for Python 3, and provides "...a small, fast, self-contained, high-reliability, full-featured, SQL database engine." https://www.sqlite.org/index.html
+Data will be retrieved with API calls made with the "requests" Python library, and then loaded into a SQLite database. The SQLite module is part of the standard library for Python 3, and provides "...a small, fast, self-contained, high-reliability, full-featured, SQL database engine." https://www.sqlite.org/index.html
 
 After data is loaded into the SQLite DB, SQL queries can be used to calculate for a variety of "_technical indicators_" such as the Relative Strength Index (RSI), and other metrics such as the Price/Earnings Ratio and Earnings Yield. This information may then be used to attempt to predict future changes on stock markets.
 
