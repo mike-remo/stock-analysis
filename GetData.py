@@ -71,8 +71,10 @@ def saveData(file: str, data):
 # 2 for writing stock data to the staging table, then transfer to main table
 # 3 for writing earnings data to the staging table, then transfer to main table
 # 4 for writing stock description info
+# 5 to flush eps tables first for data to be refreshed
+# 6 to update quarter_eps table with the calculated ttm values
 def writeDB(file: str, option = 0, data = None):
-    if option not in [1,2,3,4]: return # invalid options
+    if option not in [1,2,3,4,5,6]: return # invalid options
     print("Opening SQLite DB...")
     connection = sqlite3.connect(file)
     cursor = connection.cursor()
@@ -120,7 +122,39 @@ def writeDB(file: str, option = 0, data = None):
             "ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
             ") SELECT symbol, close_date, close_price, avg_gain, avg_loss, "
             "(avg_gain / avg_loss) AS RS, 100 - (100 / (1 + (avg_gain / avg_loss))) AS RSI "
-            "FROM cte_recur ORDER BY close_date DESC;"
+            "FROM cte_recur ORDER BY close_date DESC;",
+            # EMA26
+            "DROP VIEW IF EXISTS vw_macd_ema26;",
+            "CREATE VIEW vw_macd_ema26 AS "
+            "WITH RECURSIVE cte_sma AS ( "
+            "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, SMA26 "
+            "FROM vw_macd_sma WHERE close_date > date('now','-180 days') "
+            "), cte_recur AS ( "
+            "SELECT *, SMA26 AS EMA26 FROM cte_sma WHERE rownum = 26 "
+            "UNION ALL "
+            "SELECT curr.*, (curr.close_price * (2.0/27)) + (prev.EMA26 * (1-2.0/27)) "
+            "FROM cte_sma AS curr INNER JOIN cte_recur AS prevON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
+            ") SELECT * FROM cte_recur ORDER BY close_date DESC;",
+            # EMA12
+            "DROP VIEW IF EXISTS vw_macd_ema12;",
+            "CREATE VIEW vw_macd_ema12 AS "
+            "WITH RECURSIVE cte_sma AS ( "
+            "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, SMA12 "
+            "FROM vw_macd_sma WHERE close_date > date('now','-180 days') "
+            "), cte_recur AS ( "
+            "SELECT *, SMA12 AS EMA12 FROM cte_sma WHERE rownum = 12 "
+            "UNION ALL "
+            "SELECT curr.*, (curr.close_price * (2.0/13)) + (prev.EMA12 * (1-2.0/13)) "
+            "FROM cte_sma AS curr INNER JOIN cte_recur AS prev ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
+            ") SELECT * FROM cte_recur ORDER BY close_date DESC;",
+            # MACD
+            "DROP VIEW IF EXISTS vw_macd;",
+            "CREATE VIEW vw_macd AS "
+            "SELECT ema26.symbol, ema26.close_date, ema26.close_price, (EMA12-EMA26) AS MACD "
+            "FROM vw_macd_ema26 ema26 "
+            "INNER JOIN vw_macd_ema12 ema12 "
+            "ON ema26.symbol = ema12.symbol AND ema26.close_date = ema12.close_date "
+            "ORDER BY ema26.close_date DESC;"
         ]
         for c in SQLddl: cursor.execute(c)
 
@@ -132,29 +166,40 @@ def writeDB(file: str, option = 0, data = None):
         cursor.execute("INSERT OR IGNORE INTO stocks (datetime, symbol, open, high, low, close, volume) SELECT datetime, symbol, open, high, low, close, volume FROM stock_staging;")
 
     elif option == 3 and data != None:
-        cursor.execute("DELETE FROM annual_eps_staging;")
+        SQLdml = (
+            "DELETE FROM annual_eps_staging;",
+            "DELETE FROM quarter_eps_staging;"
+        )
+        for c in SQLdml: cursor.execute(c)
+
         symbol = data["symbol"]
         for i in data["annualEarnings"]:
             cursor.execute("INSERT INTO annual_eps_staging (symbol, fiscalDateEnding, reportedEPS) VALUES (?, ?, ?);",
                            (symbol, i["fiscalDateEnding"], i["reportedEPS"]))
         cursor.execute("INSERT OR IGNORE INTO annual_eps (symbol, fiscalDateEnding, reportedEPS) SELECT symbol, fiscalDateEnding, reportedEPS FROM annual_eps_staging;")
         
-        cursor.execute("DELETE FROM quarter_eps_staging;")
         for j in data["quarterlyEarnings"]:
             cursor.execute("INSERT INTO quarter_eps_staging (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage) VALUES (?, ?, ?, ?, ?, ?);",
                            (symbol, j["fiscalDateEnding"], j["reportedEPS"], j["estimatedEPS"], j["surprise"], j["surprisePercentage"]))
         cursor.execute("INSERT OR IGNORE INTO quarter_eps (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage) "
                        "SELECT symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage FROM quarter_eps_staging WHERE reportedEPS != 'None';")
 
-        # Update quarter_eps table with the calculated ttm values
-        cursor.execute("UPDATE quarter_eps SET ttm = sub.ttm FROM (SELECT symbol, reportedEPS, fiscalDateEnding, "
-                       "SUM(reportedEPS) OVER (PARTITION BY symbol ORDER BY fiscalDateEnding DESC ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) AS ttm "
-                       "FROM quarter_eps) sub WHERE quarter_eps.symbol = sub.symbol AND quarter_eps.fiscalDateEnding = sub.fiscalDateEnding;")
-
     elif option == 4 and data != None:
         for d in data["data"]:
             cursor.execute("INSERT OR IGNORE INTO stock_descr (symbol, name, currency, exchange, mic_code, country, type) VALUES (?, ?, ?, ?, ?, ?, ?);",
                            (d["symbol"], d["name"], d["currency"], d["exchange"], d["mic_code"], d["country"], d["type"]))
+    
+    elif option == 5:
+        SQLdml = (
+            "DELETE FROM annual_eps;",
+            "DELETE FROM quarter_eps;"
+        )
+        for c in SQLdml: cursor.execute(c)
+    
+    elif option == 6:
+        cursor.execute("UPDATE quarter_eps SET ttm = sub.ttm FROM (SELECT symbol, reportedEPS, fiscalDateEnding, "
+                       "SUM(reportedEPS) OVER (PARTITION BY symbol ORDER BY fiscalDateEnding DESC ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) AS ttm "
+                       "FROM quarter_eps) sub WHERE quarter_eps.symbol = sub.symbol AND quarter_eps.fiscalDateEnding = sub.fiscalDateEnding;")
     
     print("Closing DB...")
     connection.commit()
@@ -263,6 +308,8 @@ def main():
     if choice == 'y' or choice == 'Y' : # Optionally update earnings report data
         counter = 0
         countSuccess = 0
+        writeDB(fileDB, 5) # Flush old earnings data first
+
         for stock in stocks:
             counter += 1
             now = datetime.datetime.now()
@@ -281,7 +328,8 @@ def main():
             if(counter != listCount):
                 print("Waiting...")
                 sleep(delay)
-            
+        
+        writeDB(fileDB, 6) # Update EPS TTM
         print("Successfully loaded: " + str(countSuccess) + " -- Failed to load: " + str(counter - countSuccess))
     else:
         print("Skipping earnings report update.")
