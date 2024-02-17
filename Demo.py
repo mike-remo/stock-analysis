@@ -81,6 +81,7 @@ def main():
         print("4: P/E ratio and Earnings Yield")
         print("5: Simple Moving Average over 15d")
         print("6: Relative Strength Index 14d")
+        print("7: MACD 12d-26d")
         print('C: Custom query')
         print("F: Flush data from tables")
         print("Q: Quit")
@@ -127,6 +128,12 @@ def main():
             SQL1 = (f"SELECT * FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 60;")
             table = readDB(fileDB, SQL1)
             print("RSI 14d Report:")
+            print(table.to_string())
+        elif choice == "7":
+            symbol = getSymbol(fileDB, symbol)
+            SQL1 = (f"SELECT * FROM vw_macd WHERE symbol = '{symbol}';")
+            table = readDB(fileDB, SQL1)
+            print("MACD:")
             print(table.to_string())
         elif choice in ['f','F']:
             confirm = input("Flush data: ARE YOU SURE? [Y] to confirm: ")
