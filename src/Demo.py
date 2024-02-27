@@ -19,6 +19,7 @@ import sqlite3
 import pandas
 
 def execDB(file: str, commands: list):
+    """Execute SQL statements in from a list on to the specified DB file"""
     print("Opening DB...")
     connection = sqlite3.connect(file)
     cursor = connection.cursor()
@@ -29,6 +30,7 @@ def execDB(file: str, commands: list):
     connection.close()
 
 def readDB(file: str, command):
+    """Read from DB file and return results of query"""
     print("\nFetching data from DB...")
     connection = sqlite3.connect(file)
     results = pandas.read_sql_query(command, connection)
@@ -36,8 +38,8 @@ def readDB(file: str, command):
     return results
 
 def getSymbol(file: str, symbol = 0):
-    if symbol != 0: # Bypass if a stock symbol was previously chosen
-        return symbol
+    """View available stock symbols in DB to query and allow user to select one"""
+    if symbol != 0: return symbol # Bypass if a stock symbol was previously chosen
 
     SQLinfo = "SELECT symbol, name, currency, exchange FROM stock_descr ORDER BY symbol ASC;"
     table = readDB(file, SQLinfo)
@@ -107,7 +109,7 @@ def main():
                     "INNER JOIN vw_pe_and_ey AS pe ON stk.symbol = pe.symbol AND stk.datetime = pe.close_date "
                     "INNER JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
                     "INNER JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
-                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 10;")
+                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 30;")
             table = readDB(fileDB, SQL1)
             print("OVerview for " + symbol)
             print(table.to_string())
