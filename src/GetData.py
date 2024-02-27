@@ -21,14 +21,14 @@ import datetime
 import sqlite3
 import json
 
-# Get API key from TXT/JSON file stored locally
 def getKey(keyFor=""):
+    """Get API key from JSON file stored locally"""
     with open("keys.json", 'r') as file:
         contents = json.load(file)
         return contents[keyFor]
 
-# API call to get data from Twelve Data
 def APIcallTD(symbol: str, days = 1, exch = "NASDAQ"):
+    """Get timeseries data from Twelve Data"""
     url = "http://api.twelvedata.com/time_series"
     querystring = {"exchange":exch,
                    "symbol":symbol,
@@ -41,8 +41,8 @@ def APIcallTD(symbol: str, days = 1, exch = "NASDAQ"):
     response = requests.get(url, headers=header, params=querystring)
     return response.json()
 
-# API call to get data from AlphaVantage
 def APIcallAV(symbol: str):
+    """Get data from AlphaVantage"""
     url = "https://www.alphavantage.co/query"
     querystring = {"function":"EARNINGS",
                    "symbol":symbol,
@@ -51,30 +51,32 @@ def APIcallAV(symbol: str):
     response = requests.get(url, params=querystring)
     return response.json()
 
-# API call to get stock description info from Twelve Data
 def APIcallTD2(symbol: str, exchange="NASDAQ"):
+    """Get stock description info from Twelve Data"""
     url = "http://api.twelvedata.com/stocks"
     querystring = {"symbol":symbol,"exchange":exchange,"format":"json"}
     headers = {"Authorization":"apikey "+getKey("TD")}
     response = requests.get(url, headers=headers, params=querystring)
     return response.json()
 
-# For optionally saving raw data to file for archiving/data lake
 def saveData(file: str, data):
+    """For optionally saving raw data to file for archiving"""
     with open(file, 'w') as open_file:
         print("Writing to: " + file)
         json.dump(data, open_file)
 
-# Function for writing and updating SQLite DB.
-# Option specifies:
-# 1 for initializing DB and defining schema
-# 2 for writing stock data to the staging table, then transfer to main table
-# 3 for writing earnings data to the staging table, then transfer to main table
-# 4 for writing stock description info
-# 5 to flush eps tables first for data to be refreshed
-# 6 to update quarter_eps table with the calculated ttm values
 def writeDB(file: str, option = 0, data = None):
-    if option not in [1,2,3,4,5,6]: return # invalid options
+    """
+    Function for writing and updating SQLite DB.
+    Option specifies:
+    1 for initializing DB and defining schema
+    2 for writing stock data to the staging table, then transfer to main table
+    3 for writing earnings data to the staging table, then transfer to main table
+    4 for writing stock description info
+    5 to flush eps tables first for data to be refreshed
+    6 to update quarter_eps table with the calculated ttm values
+    """
+    if option not in [1,2,3,4,5,6]: return
     print("Opening SQLite DB...")
     connection = sqlite3.connect(file)
     cursor = connection.cursor()
@@ -82,7 +84,7 @@ def writeDB(file: str, option = 0, data = None):
 
     if option == 1:
         SQLddl = [
-            # Schema DDL
+            # Schema DDL:
             "CREATE TABLE stock_staging (datetime, symbol, open, high, low, close, volume);",
             "CREATE TABLE stocks (datetime, symbol, open, high, low, close, volume, CONSTRAINT uq_pk PRIMARY KEY (datetime, symbol));",
             "CREATE TABLE stock_descr (symbol, name, currency, exchange, mic_code, country, type, CONSTRAINT uq_pk PRIMARY KEY (symbol,exchange));",
@@ -90,16 +92,16 @@ def writeDB(file: str, option = 0, data = None):
             "CREATE TABLE annual_eps (symbol, fiscalDateEnding, reportedEPS, CONSTRAINT uq_pk PRIMARY KEY (symbol, fiscalDateEnding));",
             "CREATE TABLE quarter_eps_staging (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage);",
             "CREATE TABLE quarter_eps (symbol, fiscalDateEnding, reportedEPS, estimatedEPS, surprise, surprisePercentage, ttm, CONSTRAINT uq_pk PRIMARY KEY (symbol, fiscalDateEnding));",
-            # P/E Ratio and Earnings Yield
+            # P/E Ratio and Earnings Yield:
             "DROP VIEW IF EXISTS vw_pe_and_ey;",
             "CREATE VIEW vw_pe_and_ey AS SELECT stk.symbol, datetime as close_date, (close/ttm) AS PEratio, (ttm/close) AS EarnYield FROM stocks AS stk "
             "LEFT JOIN quarter_eps AS eps ON stk.symbol = eps.symbol AND fiscalDateEnding = ( "
             "SELECT MAX(fiscalDateEnding) FROM quarter_eps WHERE fiscalDateEnding <= datetime AND symbol = stk.symbol);",
-            # Simple Moving Averages
+            # Simple Moving Averages:
             "DROP VIEW IF EXISTS vw_SMA15d;",
             "CREATE VIEW vw_SMA15d AS SELECT symbol, datetime AS close_date, "
             "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 14 FOLLOWING) / 14 as MovAVG FROM stocks;",
-            # Gain/Loss for RSI
+            # Gain/Loss for RSI:
             "DROP VIEW IF EXISTS vw_gainloss14d;",
             "CREATE VIEW vw_gainloss14d AS "
             "WITH cte AS (SELECT symbol, datetime AS close_date, close AS close_price, LEAD(close,1) OVER (PARTITION BY symbol ORDER BY datetime DESC) prev_close FROM stocks) "
@@ -109,7 +111,7 @@ def writeDB(file: str, option = 0, data = None):
             "AVG(CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_gain14, "
             "AVG(CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_loss14 "
             "FROM cte GROUP BY symbol, close_date ORDER BY close_date DESC;",
-            # Relative Strength Index
+            # Relative Strength Index:
             "DROP VIEW IF EXISTS vw_rsi;",
             "CREATE VIEW vw_rsi AS "
             "WITH RECURSIVE cte_gainloss AS ( "
@@ -123,31 +125,31 @@ def writeDB(file: str, option = 0, data = None):
             ") SELECT symbol, close_date, close_price, avg_gain, avg_loss, "
             "(avg_gain / avg_loss) AS RS, 100 - (100 / (1 + (avg_gain / avg_loss))) AS RSI "
             "FROM cte_recur ORDER BY close_date DESC;",
-            # EMA26
+            # EMA26:
             "DROP VIEW IF EXISTS vw_macd_ema26;",
             "CREATE VIEW vw_macd_ema26 AS "
             "WITH RECURSIVE cte_sma AS ( "
             "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, SMA26 "
-            "FROM vw_macd_sma WHERE close_date > date('now','-180 days') "
+            "FROM vw_macd_sma WHERE close_date > date('now','-360 days') "
             "), cte_recur AS ( "
             "SELECT *, SMA26 AS EMA26 FROM cte_sma WHERE rownum = 26 "
             "UNION ALL "
             "SELECT curr.*, (curr.close_price * (2.0/27)) + (prev.EMA26 * (1-2.0/27)) "
             "FROM cte_sma AS curr INNER JOIN cte_recur AS prevON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
             ") SELECT * FROM cte_recur ORDER BY close_date DESC;",
-            # EMA12
+            # EMA12:
             "DROP VIEW IF EXISTS vw_macd_ema12;",
             "CREATE VIEW vw_macd_ema12 AS "
             "WITH RECURSIVE cte_sma AS ( "
             "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, SMA12 "
-            "FROM vw_macd_sma WHERE close_date > date('now','-180 days') "
+            "FROM vw_macd_sma WHERE close_date > date('now','-360 days') "
             "), cte_recur AS ( "
             "SELECT *, SMA12 AS EMA12 FROM cte_sma WHERE rownum = 12 "
             "UNION ALL "
             "SELECT curr.*, (curr.close_price * (2.0/13)) + (prev.EMA12 * (1-2.0/13)) "
             "FROM cte_sma AS curr INNER JOIN cte_recur AS prev ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
             ") SELECT * FROM cte_recur ORDER BY close_date DESC;",
-            # MACD
+            # MACD:
             "DROP VIEW IF EXISTS vw_macd;",
             "CREATE VIEW vw_macd AS "
             "SELECT ema26.symbol, ema26.close_date, ema26.close_price, (EMA12-EMA26) AS MACD "
@@ -205,12 +207,14 @@ def writeDB(file: str, option = 0, data = None):
     connection.commit()
     connection.close()
 
-# Read data out of DB
-# Option specifies:
-# 1 for querying DB for any stock symbol not in the stock_descr table
-# 2 for querying DB for the latest date of specified symbol from the stocks table
 def readDB(file: str, option = 0, symbol = None):
-    if option not in [1,2]: return # invalid options
+    """
+    Read data out of DB
+    Option specifies:
+    1 for querying DB for any stock symbol not in the stock_descr table
+    2 for querying DB for the latest date of specified symbol from the stocks table
+    """
+    if option not in [1,2]: return
     print("Opening SQLite DB...")
     connection = sqlite3.connect(file)
     cursor = connection.cursor()
@@ -260,7 +264,7 @@ def main():
             lastestDate = readDB(fileDB, 2, stock) # Calculate how much historical data to fetch based on last timestamp
             if lastestDate == [(None, None)]:
                 print("No existing data. New request.")
-                lastNdays = 3652 # 10y
+                lastNdays = 3652 # ~10y
             else:
                 lastDate = datetime.datetime.strptime(lastestDate[0][1],'%Y-%m-%d')
                 datediff = today.date() - lastDate.date()
