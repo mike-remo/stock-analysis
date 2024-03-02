@@ -108,8 +108,10 @@ def writeDB(file: str, option = 0, data = None):
             "SELECT symbol, close_date, close_price,"
             "CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END gain, "
             "CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END loss, "
-            "AVG(CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_gain14, "
-            "AVG(CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END) OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_loss14 "
+            "AVG(CASE WHEN (close_price - prev_close) > 0 THEN (close_price - prev_close) ELSE 0 END) "
+            "OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_gain14, "
+            "AVG(CASE WHEN (close_price - prev_close) < 0 THEN (prev_close - close_price) ELSE 0 END) "
+            "OVER (PARTITION BY symbol ORDER BY close_date DESC ROWS BETWEEN CURRENT ROW AND 13 FOLLOWING) avg_loss14 "
             "FROM cte GROUP BY symbol, close_date ORDER BY close_date DESC;",
             # Relative Strength Index:
             "DROP VIEW IF EXISTS vw_rsi;",
@@ -125,6 +127,13 @@ def writeDB(file: str, option = 0, data = None):
             ") SELECT symbol, close_date, close_price, avg_gain, avg_loss, "
             "(avg_gain / avg_loss) AS RS, 100 - (100 / (1 + (avg_gain / avg_loss))) AS RSI "
             "FROM cte_recur ORDER BY close_date DESC;",
+            # SMA used for calc EMA:
+            "DROP VIEW IF EXISTS vw_macd_sma;",
+            "CREATE VIEW vw_macd_sma AS "
+            "SELECT symbol, datetime AS close_date, close AS close_price, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 25 FOLLOWING) / 26 AS SMA26, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 11 FOLLOWING) / 12 AS SMA12 "
+            "FROM stocks;",
             # EMA26:
             "DROP VIEW IF EXISTS vw_macd_ema26;",
             "CREATE VIEW vw_macd_ema26 AS "
@@ -135,7 +144,7 @@ def writeDB(file: str, option = 0, data = None):
             "SELECT *, SMA26 AS EMA26 FROM cte_sma WHERE rownum = 26 "
             "UNION ALL "
             "SELECT curr.*, (curr.close_price * (2.0/27)) + (prev.EMA26 * (1-2.0/27)) "
-            "FROM cte_sma AS curr INNER JOIN cte_recur AS prevON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
+            "FROM cte_sma AS curr INNER JOIN cte_recur AS prev ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
             ") SELECT * FROM cte_recur ORDER BY close_date DESC;",
             # EMA12:
             "DROP VIEW IF EXISTS vw_macd_ema12;",
@@ -156,7 +165,19 @@ def writeDB(file: str, option = 0, data = None):
             "FROM vw_macd_ema26 ema26 "
             "INNER JOIN vw_macd_ema12 ema12 "
             "ON ema26.symbol = ema12.symbol AND ema26.close_date = ema12.close_date "
-            "ORDER BY ema26.close_date DESC;"
+            "ORDER BY ema26.close_date DESC;",
+            # MACD w/ Signal
+            "DROP VIEW IF EXISTS vw_macd2;",
+            "CREATE VIEW vw_macd2 AS "
+            "WITH RECURSIVE cte_macd AS ( "
+            "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, MACD "
+            "FROM vw_macd "
+            "), cte_recur AS ( "
+            "SELECT *, MACD AS signal FROM cte_macd WHERE rownum = 9 "
+            "UNION ALL "
+            "SELECT curr.*, (curr.MACD * (2.0/10)) + (prev.signal * (1-2.0/10)) "
+            "FROM cte_macd AS curr INNER JOIN cte_recur AS prev ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
+            ") SELECT symbol, close_date, close_price, MACD, signal FROM cte_recur ORDER BY close_date DESC;"
         ]
         for c in SQLddl: cursor.execute(c)
 
