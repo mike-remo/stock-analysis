@@ -21,9 +21,9 @@ import datetime
 import sqlite3
 import json
 
-def getKey(keyFor=""):
+def getKey(keyFor="", keyFile="keys.json"):
     """Get API key from JSON file stored locally"""
-    with open("keys.json", 'r') as file:
+    with open(keyFile, 'r') as file:
         contents = json.load(file)
         return contents[keyFor]
 
@@ -252,22 +252,34 @@ def readDB(file: str, option = 0, symbol = None):
 def main():
     delay = 30 # How many seconds to delay subsequent API calls
     today = datetime.datetime.today()
-    stocks = []
-    
+    keyFile = "keys.json"
     stockListFile = "stocklist.txt" # List of stock symbols to check, one per line.
+    fileDB = "data1.sqlite" # Path to SQLite DB file
+
+    if isfile(keyFile) == False:
+        print("API keys file not found, creating new file...")
+        with open(keyFile, 'w') as open_file:
+            keys_placeholder = {}
+            keys_placeholder["TD"] = input("Enter your 12 Data API Key here, or ENTER to skip: ")
+            if(keys_placeholder["TD"] == ''): keys_placeholder["TD"] = "YOUR-TWELVE-DATA-API-KEY-HERE"
+            keys_placeholder["AV"] = input("Enter your AlphaVantage API Key here, or ENTER to skip: ")
+            if(keys_placeholder["AV"] == ''): keys_placeholder["AV"] = "YOUR-ALPHA-VANTAGE-API-KEY-HERE"
+            print("If you need to edit your API keys, do so in the file: " + keyFile)
+            json.dump(keys_placeholder, open_file)
+    
     if isfile(stockListFile) == False:
         print("Stock list file not found, creating new file...")
         with open(stockListFile, 'w') as open_file:
             add_symbol = input("Enter in one stock symbol to check: ")
             open_file.write(add_symbol)
 
+    stocks = []
     print("Reading: " + stockListFile)
     with open(stockListFile, 'r') as open_file:
         for l in open_file:
             stocks.append(l.rstrip('\n'))
     listCount = len(stocks)
 
-    fileDB = "data1.sqlite" # Path to SQLite DB file
     if isfile(fileDB) == False:
         print("DB file not found, creating new file...")
         writeDB(fileDB, 1)
