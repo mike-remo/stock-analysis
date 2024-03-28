@@ -249,13 +249,8 @@ def readDB(file: str, option = 0, symbol = None):
     connection.close()
     return results
 
-def main():
-    delay = 30 # How many seconds to delay subsequent API calls
-    today = datetime.datetime.today()
-    keyFile = "keys.json"
-    stockListFile = "stocklist.txt" # List of stock symbols to check, one per line.
-    fileDB = "data1.sqlite" # Path to SQLite DB file
-
+def fileChecks(keyFile = "keys.json", stockListFile = "stocklist.txt", fileDB = "data1.sqlite"):
+    """Check for required files, and if necessary, create missing files"""
     if isfile(keyFile) == False:
         print("API keys file not found, creating new file...")
         with open(keyFile, 'w') as open_file:
@@ -273,16 +268,25 @@ def main():
             add_symbol = input("Enter in one stock symbol to check: ")
             open_file.write(add_symbol)
 
+    if isfile(fileDB) == False:
+        print("DB file not found, creating new file...")
+        writeDB(fileDB, 1)
+
+def main():
+    delay = 30 # How many seconds to delay subsequent API calls
+    today = datetime.datetime.today()
+    keyFile = "keys.json" # Path to API keys file
+    stockListFile = "stocklist.txt" # List of stock symbols to check, one per line
+    fileDB = "data1.sqlite" # Path to SQLite DB file
+
+    fileChecks(keyFile, stockListFile, fileDB)
+
     stocks = []
     print("Reading: " + stockListFile)
     with open(stockListFile, 'r') as open_file:
         for l in open_file:
             stocks.append(l.rstrip('\n'))
     listCount = len(stocks)
-
-    if isfile(fileDB) == False:
-        print("DB file not found, creating new file...")
-        writeDB(fileDB, 1)
 
     choice = input("Update daily price data? [Y] ")
     if choice == 'y' or choice == 'Y' :
