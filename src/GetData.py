@@ -21,13 +21,13 @@ import datetime
 import sqlite3
 import json
 
-def getKey(keyFor="", keyFile="keys.json"):
+def get_key(key_for="", key_file="keys.json"):
     """Get API key from JSON file stored locally"""
-    with open(keyFile, 'r') as file:
-        contents = json.load(file)
-        return contents[keyFor]
+    with open(key_file, 'r') as open_file:
+        contents = json.load(open_file)
+        return contents[key_for]
 
-def APIcallTD(symbol: str, days = 1, exch = "NASDAQ"):
+def api_td(symbol: str, days = 1, exch = "NASDAQ"):
     """Get timeseries data from Twelve Data"""
     url = "http://api.twelvedata.com/time_series"
     querystring = {"exchange":exch,
@@ -37,35 +37,35 @@ def APIcallTD(symbol: str, days = 1, exch = "NASDAQ"):
                    "timezone":"exchange",
                    "format":"json"
                    }
-    header = {"Authorization":"apikey "+getKey("TD")}
+    header = {"Authorization":"apikey "+get_key("TD")}
     response = requests.get(url, headers=header, params=querystring)
     return response.json()
 
-def APIcallAV(symbol: str):
+def api_av(symbol: str):
     """Get data from AlphaVantage"""
     url = "https://www.alphavantage.co/query"
     querystring = {"function":"EARNINGS",
                    "symbol":symbol,
-                   "apikey":getKey("AV")
+                   "apikey":get_key("AV")
                    }
     response = requests.get(url, params=querystring)
     return response.json()
 
-def APIcallTD2(symbol: str, exchange="NASDAQ"):
+def api_td2(symbol: str):
     """Get stock description info from Twelve Data"""
     url = "http://api.twelvedata.com/stocks"
-    querystring = {"symbol":symbol,"exchange":exchange,"format":"json"}
-    headers = {"Authorization":"apikey "+getKey("TD")}
+    querystring = {"symbol":symbol,"country":"United States","format":"json"}
+    headers = {"Authorization":"apikey "+get_key("TD")}
     response = requests.get(url, headers=headers, params=querystring)
     return response.json()
 
-def saveData(file: str, data):
+def save_data(file: str, data):
     """For optionally saving raw data to file for archiving"""
     with open(file, 'w') as open_file:
         print("Writing to: " + file)
         json.dump(data, open_file)
 
-def writeDB(file: str, option = 0, data = None):
+def write_db(file: str, option = 0, data = None):
     """
     Function for writing and updating SQLite DB.
     Option specifies:
@@ -83,7 +83,7 @@ def writeDB(file: str, option = 0, data = None):
     print("Writing to DB...")
 
     if option == 1:
-        SQLddl = [
+        sqlddl = [
             # Schema DDL:
             "CREATE TABLE stock_staging (datetime, symbol, open, high, low, close, volume);",
             "CREATE TABLE stocks (datetime, symbol, open, high, low, close, volume, CONSTRAINT uq_pk PRIMARY KEY (datetime, symbol));",
@@ -179,7 +179,8 @@ def writeDB(file: str, option = 0, data = None):
             "FROM cte_macd AS curr INNER JOIN cte_recur AS prev ON curr.rownum = prev.rownum + 1 AND curr.symbol = prev.symbol "
             ") SELECT symbol, close_date, close_price, MACD, signal FROM cte_recur ORDER BY close_date DESC;"
         ]
-        for c in SQLddl: cursor.execute(c)
+        for c in sqlddl:
+            cursor.execute(c)
 
     elif option == 2 and data != None:
         cursor.execute("DELETE FROM stock_staging;")
@@ -189,12 +190,12 @@ def writeDB(file: str, option = 0, data = None):
         cursor.execute("INSERT OR IGNORE INTO stocks (datetime, symbol, open, high, low, close, volume) SELECT datetime, symbol, open, high, low, close, volume FROM stock_staging;")
 
     elif option == 3 and data != None:
-        SQLdml = (
+        sqldml = (
             "DELETE FROM annual_eps_staging;",
             "DELETE FROM quarter_eps_staging;"
         )
-        for c in SQLdml: cursor.execute(c)
-
+        for c in sqldml:
+            cursor.execute(c)
         symbol = data["symbol"]
         for i in data["annualEarnings"]:
             cursor.execute("INSERT INTO annual_eps_staging (symbol, fiscalDateEnding, reportedEPS) VALUES (?, ?, ?);",
@@ -213,11 +214,12 @@ def writeDB(file: str, option = 0, data = None):
                            (d["symbol"], d["name"], d["currency"], d["exchange"], d["mic_code"], d["country"], d["type"]))
     
     elif option == 5:
-        SQLdml = (
+        sqldml = (
             "DELETE FROM annual_eps;",
             "DELETE FROM quarter_eps;"
         )
-        for c in SQLdml: cursor.execute(c)
+        for c in sqldml:
+            cursor.execute(c)
     
     elif option == 6:
         cursor.execute("UPDATE quarter_eps SET ttm = sub.ttm FROM (SELECT symbol, reportedEPS, fiscalDateEnding, "
@@ -225,10 +227,11 @@ def writeDB(file: str, option = 0, data = None):
                        "FROM quarter_eps) sub WHERE quarter_eps.symbol = sub.symbol AND quarter_eps.fiscalDateEnding = sub.fiscalDateEnding;")
     
     print("Closing DB...")
+    cursor.close()
     connection.commit()
     connection.close()
 
-def readDB(file: str, option = 0, symbol = None):
+def read_db(file: str, option = 0, symbol = None):
     """
     Read data out of DB
     Option specifies:
@@ -246,97 +249,108 @@ def readDB(file: str, option = 0, symbol = None):
         cursor.execute("SELECT symbol, MAX(datetime) from stocks WHERE symbol = ?;",(symbol,))
         results = cursor.fetchall()
     print("Closing DB...")
+    cursor.close()
     connection.close()
     return results
 
-def fileChecks(keyFile = "keys.json", stockListFile = "stocklist.txt", fileDB = "data1.sqlite"):
+def file_checks(key_file = "keys.json", stocks_file = "stocklist.txt", file_db = "data1.sqlite"):
     """Check for required files, and if necessary, create missing files"""
-    if isfile(keyFile) == False:
+    if isfile(key_file) == False:
         print("API keys file not found, creating new file...")
-        with open(keyFile, 'w') as open_file:
+        with open(key_file, 'w') as open_file:
             keys_placeholder = {}
             keys_placeholder["TD"] = input("Enter your 12 Data API Key here, or ENTER to skip: ")
             if(keys_placeholder["TD"] == ''): keys_placeholder["TD"] = "YOUR-TWELVE-DATA-API-KEY-HERE"
             keys_placeholder["AV"] = input("Enter your AlphaVantage API Key here, or ENTER to skip: ")
             if(keys_placeholder["AV"] == ''): keys_placeholder["AV"] = "YOUR-ALPHA-VANTAGE-API-KEY-HERE"
-            print("If you need to edit your API keys, do so in the file: " + keyFile)
+            print("If you need to edit your API keys, do so in the file: " + key_file)
             json.dump(keys_placeholder, open_file)
     
-    if isfile(stockListFile) == False:
+    if isfile(stocks_file) == False:
         print("Stock list file not found, creating new file...")
-        with open(stockListFile, 'w') as open_file:
-            add_symbol = input("Enter in one stock symbol to check: ")
+        with open(stocks_file, 'w') as open_file:
+            add_symbol = input("Enter in one stock symbol to check: ").upper()
             open_file.write(add_symbol)
 
-    if isfile(fileDB) == False:
+    if isfile(file_db) == False:
         print("DB file not found, creating new file...")
-        writeDB(fileDB, 1)
+        write_db(file_db, 1)
 
 def main():
     delay = 30 # How many seconds to delay subsequent API calls
     today = datetime.datetime.today()
-    keyFile = "keys.json" # Path to API keys file
-    stockListFile = "stocklist.txt" # List of stock symbols to check, one per line
-    fileDB = "data1.sqlite" # Path to SQLite DB file
+    key_file = "keys.json" # Path to API keys file
+    stocks_file = "stocklist.txt" # Stocks to check. One per line, symbol (comma) exchange. Ex.: NVDA,NASDAQ
+    file_db = "data1.sqlite" # Path to SQLite DB file
 
-    fileChecks(keyFile, stockListFile, fileDB)
+    file_checks(key_file, stocks_file, file_db)
 
     stocks = []
-    print("Reading: " + stockListFile)
-    with open(stockListFile, 'r') as open_file:
-        for l in open_file:
-            stocks.append(l.rstrip('\n'))
-    listCount = len(stocks)
+    print("Reading: " + stocks_file)
+    with open(stocks_file, 'r') as open_file:
+        for ln in open_file:
+            stocks.append(ln.upper().strip(' \r\n'))
+    listcount = len(stocks)
 
     choice = input("Update daily price data? [Y] ")
-    if choice == 'y' or choice == 'Y' :
+    if choice in ['y','Y']:
         counter = 0
-        countSuccess = 0
+        count_success = 0
         
         for stock in stocks:
             counter = counter + 1
-            now = datetime.datetime.now()
-            filename = "12Data-"+str(stock)+"-"+now.strftime("%Y%m%d-%H%M%S")+".json"
+            symbol = stock.split(',',2)[0].rstrip()
+            if symbol == '':
+                continue
+            try:
+                stockex = stock.split(',',2)[1]
+            except IndexError as ex:
+                stockex = '0'
+            if stockex not in ["NASDAQ","NYSE"]: # Limit Exchanges checked for now
+                stockex = "NASDAQ"
             
-            lastestDate = readDB(fileDB, 2, stock) # Calculate how much historical data to fetch based on last timestamp
-            if lastestDate == [(None, None)]:
+            now = datetime.datetime.now()
+            filename = "12Data-"+str(symbol)+"-"+now.strftime("%Y%m%d-%H%M%S")+".json" # Path of file to save if saving raw data
+            
+            lastestdate = read_db(file_db, 2, symbol) # Calculate how much historical data to fetch based on last timestamp
+            if lastestdate == [(None, None)]:
                 print("No existing data. New request.")
                 lastNdays = 3652 # ~10y
             else:
-                lastDate = datetime.datetime.strptime(lastestDate[0][1],'%Y-%m-%d')
-                datediff = today.date() - lastDate.date()
-                print("Symbol: " + str(lastestDate[0][0]) + " - days since last update: " + str(datediff.days))
+                lastdate = datetime.datetime.strptime(lastestdate[0][1],'%Y-%m-%d')
+                datediff = today.date() - lastdate.date()
+                print("Symbol: " + str(lastestdate[0][0]) + " - days since last update: " + str(datediff.days))
                 lastNdays = int(datediff.days + 1)
-
-            buffer = APIcallTD(stock, lastNdays)
-            print("Getting Market Data for " + stock + " #" + str(counter) + " of " + str(listCount))
+            
+            buffer = api_td(symbol, lastNdays, stockex)
+            print("Getting data for " + symbol + " on " + stockex + " #" + str(counter) + " of " + str(listcount))
             print("API status: " + buffer["status"])
             if(buffer["status"] == "ok"):
-                writeDB(fileDB, 2, buffer)
-                #saveData(filename, buffer) # Optionally sava output to file
-                countSuccess += 1
+                write_db(file_db, 2, buffer)
+                #save_data(filename, buffer) # Optionally sava output to file
+                count_success += 1
             else:
                 print("Possible error. Check output.")
                 print(buffer)
 
-            if(counter != listCount): # Throttle requests so we don't hit API limits
+            if(counter != listcount): # Throttle requests so we don't hit API limits
                 print("Waiting...")
                 sleep(delay)
         
-        print("Successfully loaded: " + str(countSuccess) + " -- Failed to load: " + str(counter - countSuccess))
+        print("Successfully loaded: " + str(count_success) + " -- Failed to load: " + str(counter - count_success))
     else:
         print("Skipping price data update.")
     
-    missing_list = readDB(fileDB, 1) # Looking for recently added stock symbols not in the stock_descr table
+    missing_list = read_db(file_db, 1) # Looking for recently added stock symbols not in the stock_descr table
     print("Checking for new stock metadata...")
     if missing_list:
         for m in missing_list:
             stock_d = str(*m)
             print("Missing additional data for: " + stock_d)
-            buffer = APIcallTD2(stock_d)
+            buffer = api_td2(stock_d)
             print("API status: " + buffer["status"])
             if(buffer["status"] == "ok"):
-                writeDB(fileDB, 4, buffer)
+                write_db(file_db, 4, buffer)
             else:
                 print("Possible error. Check output.")
                 print(buffer)
@@ -348,30 +362,34 @@ def main():
     choice = input("Update Earnings data? [Y] ")
     if choice == 'y' or choice == 'Y' : # Optionally update earnings report data
         counter = 0
-        countSuccess = 0
-        writeDB(fileDB, 5) # Flush old earnings data first
+        count_success = 0
+        #write_db(file_db, 5) # Flush old earnings data first
 
         for stock in stocks:
             counter += 1
+            symbol = stock.split(',',2)[0].rstrip()
+            if symbol == '':
+                continue
             now = datetime.datetime.now()
-            filename = "AVdata-"+str(stock)+"-"+now.strftime("%Y%m%d-%H%M%S")+".json"
-            print("Getting Earnings Data for " + stock + " #" + str(counter) + " of " + str(listCount))
-            buffer = APIcallAV(stock)
+            filename = "AVdata-"+str(symbol)+"-"+now.strftime("%Y%m%d-%H%M%S")+".json"
+            
+            print("Getting Earnings Data for " + symbol + " #" + str(counter) + " of " + str(listcount))
+            buffer = api_av(symbol)
             if(list(buffer.keys())[0] == "symbol"):
                 print("Data received...")
-                writeDB(fileDB, 3, buffer)
-                #saveData(filename, buffer) # Optionally sava output to file
-                countSuccess += 1
+                write_db(file_db, 3, buffer)
+                #save_data(filename, buffer) # Optionally sava output to file
+                count_success += 1
             else:
                 print("Possible error. Check output.")
                 print(buffer)
             
-            if(counter != listCount):
+            if(counter != listcount):
                 print("Waiting...")
                 sleep(delay)
         
-        writeDB(fileDB, 6) # Update EPS TTM
-        print("Successfully loaded: " + str(countSuccess) + " -- Failed to load: " + str(counter - countSuccess))
+        write_db(file_db, 6) # Update EPS TTM
+        print("Successfully loaded: " + str(count_success) + " -- Failed to load: " + str(counter - count_success))
     else:
         print("Skipping earnings report update.")
 
