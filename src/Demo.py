@@ -20,18 +20,20 @@ import sqlite3
 import pandas
 import tempfile
 
-def execDB(file: str, commands: list):
+def exec_db(file: str, commands: list):
     """Execute SQL statements from a list on the specified DB"""
     print("Opening DB...")
     connection = sqlite3.connect(file)
     cursor = connection.cursor()
     print("Writing to DB...")
-    for c in commands: cursor.execute(c)
-    connection.commit()
+    for c in commands:
+        cursor.execute(c)
     print("Closing DB.")
+    cursor.close()
+    connection.commit()
     connection.close()
 
-def readDB(file: str, command):
+def read_db(file: str, command):
     """Read from DB and return results of query"""
     print("\nFetching data from DB...")
     connection = sqlite3.connect(file)
@@ -39,17 +41,17 @@ def readDB(file: str, command):
     connection.close()
     return results
 
-def getSymbol(file: str, symbol = 0):
+def get_symbol(file: str, symbol = 0):
     """View available stock symbols in DB to query and allow user to select one"""
     if symbol != 0: return symbol # Bypass if a stock symbol was previously chosen
     SQLinfo = "SELECT symbol, name, currency, exchange FROM stock_descr ORDER BY symbol ASC;"
-    table = readDB(file, SQLinfo)
+    table = read_db(file, SQLinfo)
     stocks = table['symbol'].tolist()
 
     while(True):
         print("\nAvailable stock to check:")
         print(table)
-        choice = input("Enter stock symbol *ALL CAPS* to query: ")
+        choice = input("Enter stock symbol to query: ").upper()
         if choice in ['q','Q']:
             return None
         elif choice in stocks:
@@ -58,22 +60,22 @@ def getSymbol(file: str, symbol = 0):
         else:
             print("Invalid choice.")
 
-def outputEditor(output: pandas.DataFrame):
+def output_editor(output: pandas.DataFrame):
     """
     Output results to CSV file and open it with default app
     Will open in Excel assuming it is your default CSV editor
     """
-    tmpFile = tempfile.NamedTemporaryFile(suffix = '.csv', delete = False)
-    print("Opening " + tmpFile.name + " in external editor.")
-    output.to_csv(tmpFile.name)
-    startfile(tmpFile.name)
+    tmpfile = tempfile.NamedTemporaryFile(suffix = '.csv', delete = False)
+    print("Opening " + tmpfile.name + " in external editor.")
+    output.to_csv(tmpfile.name)
+    startfile(tmpfile.name)
 
 def main():
-    fileDB = "data1.sqlite" # Specify existing SQLite DB file location here
-    if isfile(fileDB) == False:
+    file_db = "data1.sqlite" # Specify existing SQLite DB file location here
+    if isfile(file_db) == False:
         print("DB file not found, please generate the DB using GetData.py")
         return
-
+    
     choice = 0
     symbol = 0
     external = 'Y'
@@ -97,61 +99,61 @@ def main():
             print("Exiting.")
             return
         elif choice == "1":
-            symbol = getSymbol(fileDB, 0) # Manually set symbol to query
+            symbol = get_symbol(file_db, 0) # Manually set symbol to query
         elif choice == "2":
-            SQL1 = ("SELECT stk.symbol, stk.datetime AS close_date, stk.open, stk.low, stk.high, stk.close FROM stocks stk "
+            sqlcmd = ("SELECT stk.symbol, stk.datetime AS close_date, stk.open, stk.low, stk.high, stk.close FROM stocks stk "
                     "INNER JOIN (SELECT symbol, MAX(datetime) AS date FROM stocks GROUP BY symbol) last "
                     "ON stk.symbol = last.symbol AND stk.datetime = last.date;")
-            table = readDB(fileDB, SQL1)
+            table = read_db(file_db, sqlcmd)
             print("Most recent daily prices for stock in DB:")
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table)
         elif choice == "3":
-            symbol = getSymbol(fileDB, symbol) # Automatically set symbol if previously set
-            SQL1 = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, "
+            symbol = get_symbol(file_db, symbol) # Automatically set symbol if previously set
+            sqlcmd = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, "
                     "pe.PEratio, pe.EarnYield, sma.MovAVG, rsi.RSI "
                     "FROM stocks AS stk "
                     "INNER JOIN vw_pe_and_ey AS pe ON stk.symbol = pe.symbol AND stk.datetime = pe.close_date "
                     "INNER JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
                     "INNER JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
                     f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 30;")
-            table = readDB(fileDB, SQL1)
+            table = read_db(file_db, sqlcmd)
             print("OVerview for " + symbol)
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "4":
-            symbol = getSymbol(fileDB, symbol)
-            SQL1 = f"SELECT * FROM vw_pe_and_ey WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
-            table = readDB(fileDB, SQL1)
+            symbol = get_symbol(file_db, symbol)
+            sqlcmd = f"SELECT * FROM vw_pe_and_ey WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
+            table = read_db(file_db, sqlcmd)
             print("P/E ratio and Earnings Yield Report:")
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "5":
-            symbol = getSymbol(fileDB, symbol)
-            SQL1 = f"SELECT * FROM vw_SMA15d WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
-            table = readDB(fileDB, SQL1)
+            symbol = get_symbol(file_db, symbol)
+            sqlcmd = f"SELECT * FROM vw_SMA15d WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
+            table = read_db(file_db, sqlcmd)
             print("SMA 15d report:")
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "6":
-            symbol = getSymbol(fileDB, symbol)
-            SQL1 = (f"SELECT * FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 60;")
-            table = readDB(fileDB, SQL1)
+            symbol = get_symbol(file_db, symbol)
+            sqlcmd = (f"SELECT * FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 60;")
+            table = read_db(file_db, sqlcmd)
             print("RSI 14d Report:")
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "7":
-            symbol = getSymbol(fileDB, symbol)
-            SQL1 = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 60;")
-            table = readDB(fileDB, SQL1)
+            symbol = get_symbol(file_db, symbol)
+            sqlcmd = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 60;")
+            table = read_db(file_db, sqlcmd)
             print("MACD:")
-            if external in ['y','Y']: outputEditor(table)
+            if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice in ['f','F']:
             confirm = input("Flush data: ARE YOU SURE? [Y] to confirm: ")
             if confirm in ['y','Y']:
                 print("Flushing data from tables.")
-                SQLflush = [
+                sqlflush = [
                     "DELETE FROM stock_staging;",
                     "DELETE FROM stocks;",
                     "DELETE FROM stock_descr;",
@@ -160,18 +162,18 @@ def main():
                     "DELETE FROM quarter_eps_staging;",
                     "DELETE FROM quarter_eps;"
                 ]
-                execDB(fileDB, SQLflush)
+                exec_db(file_db, sqlflush)
             else: print("Operation canceled.")
         elif choice in ['c','C']:
             print("Custom SQL query: ")
-            SQL1 = input("-> ")
+            sqlcmd = input("-> ")
             try:
-                table = readDB(fileDB, SQL1)
-                print("Results of: " + SQL1)
-                if external in ['y','Y']: outputEditor(table)
+                table = read_db(file_db, sqlcmd)
+                print("Results of: " + sqlcmd)
+                if external in ['y','Y']: output_editor(table)
                 else: print(table.to_string())
-            except Exception as e:
-                print(e)
+            except Exception as ex:
+                print(ex)
                 pass
         elif choice in ['x','X']:
             print("Open results in external editor? ")
