@@ -48,5 +48,8 @@ This project currently has the following limitations:
 ### Additional Documentation
 [Metadata/Data Dictionary](https://github.com/mike-remo/stock-analysis/blob/main/docs/data-dictionary.md)
 
+### Disclaimer
+This project is intended only for informational purposes only and is not intended to give financial advice.
+
 ### LICENSE
 GNU General Public License v3.0
