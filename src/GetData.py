@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from time import sleep
-from os.path import isfile
+from os import getcwd, path
 import requests
 import datetime
 import sqlite3
@@ -255,7 +255,7 @@ def read_db(file: str, option = 0, symbol = None):
 
 def file_checks(key_file = "keys.json", stocks_file = "stocklist.txt", file_db = "data1.sqlite"):
     """Check for required files, and if necessary, create missing files"""
-    if isfile(key_file) == False:
+    if path.isfile(key_file) == False:
         print("API keys file not found, creating new file...")
         with open(key_file, 'w') as open_file:
             keys_placeholder = {}
@@ -266,13 +266,16 @@ def file_checks(key_file = "keys.json", stocks_file = "stocklist.txt", file_db =
             print("If you need to edit your API keys, do so in the file: " + key_file)
             json.dump(keys_placeholder, open_file)
     
-    if isfile(stocks_file) == False:
+    if path.isfile(stocks_file) == False:
         print("Stock list file not found, creating new file...")
         with open(stocks_file, 'w') as open_file:
-            add_symbol = input("Enter in one stock symbol to check: ").upper()
+            print("Enter in a stock to check in the format: symbol,exchange")
+            print("(Example: NVDA,NASDAQ)")
+            add_symbol = input("-> ").upper()
+            print("You may add more, or edit the list later at: " + stocks_file)
             open_file.write(add_symbol)
 
-    if isfile(file_db) == False:
+    if path.isfile(file_db) == False:
         print("DB file not found, creating new file...")
         write_db(file_db, 1)
 
@@ -280,7 +283,7 @@ def main():
     delay = 30 # How many seconds to delay subsequent API calls
     today = datetime.datetime.today()
     key_file = "keys.json" # Path to API keys file
-    stocks_file = "stocklist.txt" # Stocks to check. One per line, symbol (comma) exchange. Ex.: NVDA,NASDAQ
+    stocks_file = "stocklist.txt" # Stocks to check. One per line, symbol(comma)exchange Ex.: NVDA,NASDAQ
     file_db = "data1.sqlite" # Path to SQLite DB file
 
     file_checks(key_file, stocks_file, file_db)
@@ -394,5 +397,6 @@ def main():
         print("Skipping earnings report update.")
 
 if __name__ == "__main__":
+    print("Current working directory: " + getcwd())
     main()
     print("Script execution complete.")
