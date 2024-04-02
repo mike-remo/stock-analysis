@@ -101,9 +101,10 @@ def main():
         elif choice == "1":
             symbol = get_symbol(file_db, 0) # Manually set symbol to query
         elif choice == "2":
-            sqlcmd = ("SELECT stk.symbol, stk.datetime AS close_date, stk.open, stk.low, stk.high, stk.close FROM stocks stk "
-                    "INNER JOIN (SELECT symbol, MAX(datetime) AS date FROM stocks GROUP BY symbol) last "
-                    "ON stk.symbol = last.symbol AND stk.datetime = last.date;")
+            sqlcmd = ("SELECT stk.symbol, stk.datetime AS close_date, stk.open, stk.low, stk.high, stk.close "
+                      "FROM stocks stk "
+                      "INNER JOIN (SELECT symbol, MAX(datetime) AS date FROM stocks GROUP BY symbol) last "
+                      "ON stk.symbol = last.symbol AND stk.datetime = last.date;")
             table = read_db(file_db, sqlcmd)
             print("Most recent daily prices for stock in DB:")
             if external in ['y','Y']: output_editor(table)
@@ -111,11 +112,12 @@ def main():
         elif choice == "3":
             symbol = get_symbol(file_db, symbol) # Automatically set symbol if previously set
             sqlcmd = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, "
-                    "pe.PEratio, pe.EarnYield, sma.MovAVG, rsi.RSI "
+                    "pe.PEratio, pe.EarnYield, sma.MovAVG, rsi.RSI, macd.MACD, macd.signal "
                     "FROM stocks AS stk "
-                    "INNER JOIN vw_pe_and_ey AS pe ON stk.symbol = pe.symbol AND stk.datetime = pe.close_date "
-                    "INNER JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
-                    "INNER JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
+                    "LEFT JOIN vw_pe_and_ey AS pe ON stk.symbol = pe.symbol AND stk.datetime = pe.close_date "
+                    "LEFT JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
+                    "LEFT JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
+                    "LEFT JOIN vw_macd2 AS macd ON stk.symbol = macd.symbol AND stk.datetime = macd.close_date "
                     f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 30;")
             table = read_db(file_db, sqlcmd)
             print("OVerview for " + symbol)
