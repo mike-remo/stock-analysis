@@ -14,11 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from os.path import isfile
-from os import startfile
+import os
+import math
+import tempfile
 import sqlite3
 import pandas
-import tempfile
+from plotly import graph_objects as go, subplots as sp
 
 def exec_db(file: str, commands: list):
     """Execute SQL statements from a list on the specified DB"""
@@ -68,17 +69,72 @@ def output_editor(output: pandas.DataFrame):
     tmpfile = tempfile.NamedTemporaryFile(suffix = '.csv', delete = False)
     print("Opening " + tmpfile.name + " in external editor.")
     output.to_csv(tmpfile.name)
-    startfile(tmpfile.name)
+    os.startfile(tmpfile.name)
+
+def visualizer(raw_data: pandas.DataFrame, style: int):
+    """
+    Generate graphs with plotly lib.
+
+    Input is a dataframe with data to chart, style is int and refers to:
+    1= Candlestick chart
+    2= Indicators arranged in a grid
+
+    Output is HTML file that auto opens in default browser
+    """
+    output_file = "visualized.html"
+
+    if style == 1:
+        print("Generating graph...")
+        raw_data.sort_values(by = ['close_date'], inplace = True)
+        chart = go.Figure(
+            data = [go.Candlestick(
+                x = raw_data["close_date"],
+                open = raw_data["open"],
+                high = raw_data["high"],
+                low = raw_data["low"],
+                close = raw_data["close"] )])
+        chart.update_layout(
+            title = "Candlestick Chart for " + raw_data["symbol"][1],
+            yaxis_title = "$ USD",
+            xaxis_rangeslider_visible = False)
+        chart.write_html(output_file, auto_open = True)
+    
+    elif style == 2:
+        print("Generating graph...")
+        count = len(raw_data)
+        divisor = 4
+        chart = go.Figure()
+        for n in range(count):
+            rowno = math.floor(n / divisor)
+            colno = n % divisor
+            chart.add_trace(go.Indicator(
+                mode = "number+delta",
+                value = float(raw_data["close"][n]),
+                number = {'prefix': "$",
+                          'valueformat': ".2f"},
+                delta = {'position': "right",
+                         'reference': float(raw_data["open"][n]),
+                         'valueformat': ".2%",
+                         'relative': True},
+                title = {'text': raw_data["symbol"][n]},
+                domain = {'row': rowno, 'column': colno} ))
+        chart.update_layout(
+            title = "Indicators " + raw_data["close_date"][0],
+            grid = {'rows': math.ceil(count / divisor),
+                    'columns': divisor,
+                    'pattern': "independent"} )
+        chart.write_html(output_file, auto_open = True)
 
 def main():
     file_db = "data1.sqlite" # Specify existing SQLite DB file location here
-    if isfile(file_db) == False:
+    if os.path.isfile(file_db) == False:
         print("DB file not found, please generate the DB using GetData.py")
         return
     
     choice = 0
     symbol = 0
-    external = 'Y'
+    external = 'N'
+    visualize = 'Y'
 
     while(True):
         print("\nMenu:")
@@ -92,6 +148,7 @@ def main():
         print('C: Custom query')
         print("F: Flush data from tables")
         print("X: Open in external editor? (Currently: " + external + ")")
+        print("V: Create graph of results? (Currently: " + visualize + ")")
         print("Q: Quit")
         choice = input("Input choice: ")
 
@@ -109,6 +166,7 @@ def main():
             print("Most recent daily prices for stock in DB:")
             if external in ['y','Y']: output_editor(table)
             else: print(table)
+            if visualize in ['y','Y']: visualizer(table, 2)
         elif choice == "3":
             symbol = get_symbol(file_db, symbol) # Automatically set symbol if previously set
             sqlcmd = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, "
@@ -118,35 +176,36 @@ def main():
                     "LEFT JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
                     "LEFT JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
                     "LEFT JOIN vw_macd2 AS macd ON stk.symbol = macd.symbol AND stk.datetime = macd.close_date "
-                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 30;")
+                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 90;")
             table = read_db(file_db, sqlcmd)
             print("OVerview for " + symbol)
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
+            if visualize in ['y','Y']: visualizer(table, 1)
         elif choice == "4":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = f"SELECT * FROM vw_pe_and_ey WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
+            sqlcmd = f"SELECT * FROM vw_pe_and_ey WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 90;"
             table = read_db(file_db, sqlcmd)
             print("P/E ratio and Earnings Yield Report:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "5":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = f"SELECT * FROM vw_SMA15d WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 60;"
+            sqlcmd = f"SELECT * FROM vw_SMA15d WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 90;"
             table = read_db(file_db, sqlcmd)
             print("SMA 15d report:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "6":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = (f"SELECT * FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 60;")
+            sqlcmd = (f"SELECT symbol, close_date, close_price, RS, RSI FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 90;")
             table = read_db(file_db, sqlcmd)
             print("RSI 14d Report:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "7":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 60;")
+            sqlcmd = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 90;")
             table = read_db(file_db, sqlcmd)
             print("MACD:")
             if external in ['y','Y']: output_editor(table)
@@ -182,6 +241,11 @@ def main():
             print("(This will use the default app set for CSV files.)")
             external = input("Input 'y' or 'Y' for YES, any other for NO: ")
             if external not in ['y','Y']: external = 'N'
+        elif choice in ['v','V']:
+            print("Create graph of query results? ")
+            print("(This will use the default browser or app set for HTML files.)")
+            visualize = input("Input 'y' or 'Y' for YES, any other for NO: ")
+            if visualize not in ['y','Y']: visualize = 'N'
         else:
             print("Invalid choice.")
 
