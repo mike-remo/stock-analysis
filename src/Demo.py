@@ -63,8 +63,8 @@ def get_symbol(file: str, symbol = 0):
 
 def output_editor(output: pandas.DataFrame):
     """
-    Output results to CSV file and open it with default app
-    Will open in Excel assuming it is your default CSV editor
+    Output results to CSV file and open it with default app.
+    Will open in Excel assuming it is your default CSV editor.
     """
     tmpfile = tempfile.NamedTemporaryFile(suffix = '.csv', delete = False)
     print("Opening " + tmpfile.name + " in external editor.")
@@ -74,39 +74,75 @@ def output_editor(output: pandas.DataFrame):
 def visualizer(raw_data: pandas.DataFrame, style: int):
     """
     Generate graphs with plotly lib.
+    Output is HTML file that auto opens in default browser.
 
-    Input is a dataframe with data to chart, style is int and refers to:
-    1= Candlestick chart
-    2= Indicators arranged in a grid
+    Parameters:
+    raw_data (dataframe): Data to plot.
+    Style (int): refers to the following
+    1- Line charts, including candlestick chart for OHLC.
+    2- Indicators arranged in a grid.
 
-    Output is HTML file that auto opens in default browser
+    Returns: None
     """
     output_file = "visualized.html"
 
     if style == 1:
         print("Generating graph...")
         raw_data.sort_values(by = ['close_date'], inplace = True)
-        chart = go.Figure(
-            data = [go.Candlestick(
-                x = raw_data["close_date"],
-                open = raw_data["open"],
-                high = raw_data["high"],
-                low = raw_data["low"],
-                close = raw_data["close"] )])
+        chart = sp.make_subplots(rows = 3, cols = 1, row_heights=[0.5, 0.25, 0.25])
+        chart.add_trace(go.Candlestick(
+            name = "OHLC",
+            x = raw_data["close_date"],
+            open = raw_data["open"],
+            high = raw_data["high"],
+            low = raw_data["low"],
+            close = raw_data["close"] ),
+            row = 1, col = 1)
+        chart.add_trace(go.Scatter(
+            name = "SMA50",
+            marker = dict(color = 'blue'),
+            x = raw_data["close_date"],
+            y = raw_data["SMA50"] ),
+            row = 1, col = 1)
+        chart.add_trace(go.Scatter(
+            name = "RSI",
+            x = raw_data["close_date"],
+            y = raw_data["RSI"] ),
+            row = 2, col = 1)
+        chart.add_trace(go.Scatter(
+            name = "P/E ratio",
+            x = raw_data["close_date"],
+            y = raw_data["PEratio"] ),
+            row = 2, col = 1)
+        chart.add_trace(go.Scatter(
+            name = "MACD",
+            x = raw_data["close_date"],
+            y = raw_data["MACD"] ),
+            row = 3, col = 1)
+        chart.add_trace(go.Scatter(
+            name = "MACD signal",
+            x = raw_data["close_date"],
+            y = raw_data["signal"] ),
+            row = 3, col = 1)
         chart.update_layout(
-            title = "Candlestick Chart for " + raw_data["symbol"][1],
-            yaxis_title = "$ USD",
+            title = "Charts for " + raw_data["symbol"][1],
+            title_font_size = 24,
+            legend_title_text='Legend',
+            #yaxis_title = "$ USD",
             xaxis_rangeslider_visible = False)
+        chart.update_yaxes(title_text = "OHLC & SMA50 ($ USD)", row = 1, col = 1)
+        chart.update_yaxes(title_text = "RSI & PEr", row = 2, col = 1)
+        chart.update_yaxes(title_text = "MACD w/ Signal", row = 3, col = 1)
         chart.write_html(output_file, auto_open = True)
     
     elif style == 2:
         print("Generating graph...")
         count = len(raw_data)
-        divisor = 4
+        maxcol = 4
         chart = go.Figure()
         for n in range(count):
-            rowno = math.floor(n / divisor)
-            colno = n % divisor
+            rowno = math.floor(n / maxcol)
+            colno = n % maxcol
             chart.add_trace(go.Indicator(
                 mode = "number+delta",
                 value = float(raw_data["close"][n]),
@@ -120,8 +156,9 @@ def visualizer(raw_data: pandas.DataFrame, style: int):
                 domain = {'row': rowno, 'column': colno} ))
         chart.update_layout(
             title = "Indicators " + raw_data["close_date"][0],
-            grid = {'rows': math.ceil(count / divisor),
-                    'columns': divisor,
+            title_font_size = 24,
+            grid = {'rows': math.ceil(count / maxcol),
+                    'columns': maxcol,
                     'pattern': "independent"} )
         chart.write_html(output_file, auto_open = True)
 
@@ -139,14 +176,13 @@ def main():
     while(True):
         print("\nMenu:")
         print("1: Set/Change stock symbol to query (Currently: " + str(symbol) + ")")
-        print("2: Report latest daily prices for all")
-        print("3: Overview of specific stock")
-        print("4: P/E ratio and Earnings Yield")
-        print("5: Simple Moving Average over 15d")
-        print("6: Relative Strength Index 14d")
-        print("7: MACD 12d-26d w/ 9d Signal")
-        print('C: Custom query')
-        print("F: Flush data from tables")
+        print("2: Report latest daily prices for all (Visuals available)")
+        print("3: Overview of specific stock (Visuals available)")
+        print("  (Includes OHLC, P/E Ratio, SMA 50d, RSI 14d, MACD)")
+        print("4: Simple Moving Averages")
+        print("5: Relative Strength Index 14d")
+        print("6: MACD 12d-26d w/ 9d Signal")
+        print("C: Custom query (Ex.: SELECT * FROM stocks LIMIT 100;)")
         print("X: Open in external editor? (Currently: " + external + ")")
         print("V: Create graph of results? (Currently: " + visualize + ")")
         print("Q: Quit")
@@ -169,14 +205,14 @@ def main():
             if visualize in ['y','Y']: visualizer(table, 2)
         elif choice == "3":
             symbol = get_symbol(file_db, symbol) # Automatically set symbol if previously set
-            sqlcmd = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, "
-                    "pe.PEratio, pe.EarnYield, sma.MovAVG, rsi.RSI, macd.MACD, macd.signal "
+            sqlcmd = ("SELECT stk.symbol, datetime AS close_date, open, low, high, close, volume, "
+                    "pe.PEratio, pe.EarnYield, sma.SMA50, rsi.RSI, macd.MACD, macd.signal "
                     "FROM stocks AS stk "
                     "LEFT JOIN vw_pe_and_ey AS pe ON stk.symbol = pe.symbol AND stk.datetime = pe.close_date "
-                    "LEFT JOIN vw_SMA15d AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
+                    "LEFT JOIN vw_SMA AS sma ON stk.symbol = sma.symbol AND stk.datetime = sma.close_date "
                     "LEFT JOIN vw_rsi AS rsi ON stk.symbol = rsi.symbol AND stk.datetime = rsi.close_date "
                     "LEFT JOIN vw_macd2 AS macd ON stk.symbol = macd.symbol AND stk.datetime = macd.close_date "
-                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 90;")
+                    f"WHERE stk.symbol = '{symbol}' ORDER BY datetime DESC LIMIT 126;")
             table = read_db(file_db, sqlcmd)
             print("OVerview for " + symbol)
             if external in ['y','Y']: output_editor(table)
@@ -184,47 +220,25 @@ def main():
             if visualize in ['y','Y']: visualizer(table, 1)
         elif choice == "4":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = f"SELECT * FROM vw_pe_and_ey WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 90;"
+            sqlcmd = f"SELECT * FROM vw_SMA WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 252;"
             table = read_db(file_db, sqlcmd)
-            print("P/E ratio and Earnings Yield Report:")
+            print("Simple Moving Averages:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
         elif choice == "5":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = f"SELECT * FROM vw_SMA15d WHERE symbol = '{symbol}' ORDER BY close_date DESC LIMIT 90;"
-            table = read_db(file_db, sqlcmd)
-            print("SMA 15d report:")
-            if external in ['y','Y']: output_editor(table)
-            else: print(table.to_string())
-        elif choice == "6":
-            symbol = get_symbol(file_db, symbol)
-            sqlcmd = (f"SELECT symbol, close_date, close_price, RS, RSI FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 90;")
+            sqlcmd = (f"SELECT * FROM vw_rsi WHERE symbol = '{symbol}' LIMIT 252;")
             table = read_db(file_db, sqlcmd)
             print("RSI 14d Report:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
-        elif choice == "7":
+        elif choice == "6":
             symbol = get_symbol(file_db, symbol)
-            sqlcmd = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 90;")
+            sqlcmd = (f"SELECT * FROM vw_macd2 WHERE symbol = '{symbol}' LIMIT 252;")
             table = read_db(file_db, sqlcmd)
-            print("MACD:")
+            print("MACD 12d-26d w/ 9d Signal:")
             if external in ['y','Y']: output_editor(table)
             else: print(table.to_string())
-        elif choice in ['f','F']:
-            confirm = input("Flush data: ARE YOU SURE? [Y] to confirm: ")
-            if confirm in ['y','Y']:
-                print("Flushing data from tables.")
-                sqlflush = [
-                    "DELETE FROM stock_staging;",
-                    "DELETE FROM stocks;",
-                    "DELETE FROM stock_descr;",
-                    "DELETE FROM annual_eps_staging;",
-                    "DELETE FROM annual_eps;",
-                    "DELETE FROM quarter_eps_staging;",
-                    "DELETE FROM quarter_eps;"
-                ]
-                exec_db(file_db, sqlflush)
-            else: print("Operation canceled.")
         elif choice in ['c','C']:
             print("Custom SQL query: ")
             sqlcmd = input("-> ")
