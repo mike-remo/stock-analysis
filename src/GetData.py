@@ -98,9 +98,12 @@ def write_db(file: str, option = 0, data = None):
             "LEFT JOIN quarter_eps AS eps ON stk.symbol = eps.symbol AND fiscalDateEnding = ( "
             "SELECT MAX(fiscalDateEnding) FROM quarter_eps WHERE fiscalDateEnding <= datetime AND symbol = stk.symbol);",
             # Simple Moving Averages:
-            "DROP VIEW IF EXISTS vw_SMA15d;",
-            "CREATE VIEW vw_SMA15d AS SELECT symbol, datetime AS close_date, "
-            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 14 FOLLOWING) / 14 as MovAVG FROM stocks;",
+            "DROP VIEW IF EXISTS vw_SMA;",
+            "CREATE VIEW vw_SMA AS SELECT symbol, datetime AS close_date, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 9 FOLLOWING) / 10 as SMA10, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING) / 20 as SMA20, "
+            "SUM(close) OVER (PARTITION BY symbol ORDER BY datetime DESC ROWS BETWEEN CURRENT ROW AND 49 FOLLOWING) / 50 as SMA50 "
+            "FROM stocks;",
             # Gain/Loss for RSI:
             "DROP VIEW IF EXISTS vw_gainloss14d;",
             "CREATE VIEW vw_gainloss14d AS "
@@ -118,7 +121,7 @@ def write_db(file: str, option = 0, data = None):
             "CREATE VIEW vw_rsi AS "
             "WITH RECURSIVE cte_gainloss AS ( "
             "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, * "
-            "FROM vw_gainloss14d  WHERE close_date > date('now','-180 days') "
+            "FROM vw_gainloss14d  WHERE close_date > date('now','-500 days') "
             "), cte_recur AS ( "
             "SELECT *, avg_gain14 AS avg_gain, avg_loss14 AS avg_loss FROM cte_gainloss WHERE rownum = 14 "
             "UNION ALL SELECT curr.*, (prev.avg_gain * 13 + curr.gain) / 14, (prev.avg_loss * 13 + curr.loss) / 14 "
@@ -139,7 +142,7 @@ def write_db(file: str, option = 0, data = None):
             "CREATE VIEW vw_macd_ema26 AS "
             "WITH RECURSIVE cte_sma AS ( "
             "SELECT ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY close_date) AS rownum, symbol, close_date, close_price, SMA26 "
-            "FROM vw_macd_sma WHERE close_date > date('now','-360 days') "
+            "FROM vw_macd_sma WHERE close_date > date('now','-500 days') "
             "), cte_recur AS ( "
             "SELECT *, SMA26 AS EMA26 FROM cte_sma WHERE rownum = 26 "
             "UNION ALL "
