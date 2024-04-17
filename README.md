@@ -1,5 +1,9 @@
 # Stock Market Technical Analysis with Python and SQL
 
+Indicators | Graphs
+--- | ---
+![Example charts](https://github.com/mike-remo/stock-analysis/blob/main/samples/charts-example1.png) | ![Example charts](https://github.com/mike-remo/stock-analysis/blob/main/samples/charts-example2.png)
+
 ## Introduction
 This project is a simple look at performing "_technical analysis_" on stock market time series data using Python 3 and SQLite.
 
@@ -41,7 +45,7 @@ Additionally, to retrieve new data, you will need to get your own free API keys 
 7. Run `Demo.py` to view results from a variety of saved queries. By default, results will output to the terminal, and any option with visualizations enabled will automatically create and display the graphics in your default browser. Optionally, results may be output into Excel or whichever default app your system uses to view .CSV files by changing the external editor option ('X' at the menu). These files will be placed in your `%TEMP%` dir. You can also turn off the visualization option ('V' from the manu).
 
 ### Optionally
-* You may use the provided _/samples/data1.sqlite_ SQLite DB file that already has some sample data loaded into it. If so, you may skip steps 2=6. Make sure the file is in the same dir as the .py files.
+* You may use the provided _/samples/data1.sqlite_ SQLite DB file that already has some sample data loaded into it. If so, you may skip steps 2-6. Make sure the file is in the same dir as the .py files.
 * You may use the provided _/samples/stocklist.txt_ file which already contains some stock symbols. If so, you may skip step 4. Make sure the file is in the same dir as the .py files.
 
 ## More Info
